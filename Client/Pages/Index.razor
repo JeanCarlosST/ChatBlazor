@@ -1,0 +1,79 @@
+﻿@page "/"
+@using Microsoft.AspNetCore.SignalR.Client
+@inject NavigationManager NavigationManager
+@implements IAsyncDisposable
+
+<div class="form-group">
+    <label>
+        User:
+        <input @bind="userInput" />
+    </label>
+</div>
+<div class="form-group">
+    <label>
+        Message:
+        <input @bind="messageInput" size="50" />
+    </label>
+</div>
+<button class="btn btn-success" @onclick="Send" disabled="@(!IsConnected)">Send</button>
+<button class="btn btn-info" @onclick="GetUsers" disabled="@(!IsConnected)">See all users</button>
+
+<hr>
+
+<ul>
+    @foreach(var user in users)
+    {
+        <li>@user</li>
+    }
+</ul>
+
+<ul id="messagesList">
+    @foreach (var message in messages)
+    {
+        <li>@message</li>
+    }
+</ul>
+
+@code {
+    private HubConnection hubConnection;
+    private List<string> messages = new List<string>();
+    private List<string> users = new List<string>();
+    private string userInput;
+    private string messageInput;
+
+    protected override async Task OnInitializedAsync()
+    {
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl(NavigationManager.ToAbsoluteUri("/chathub"))
+            .Build();
+
+        hubConnection.On<string, string>("ReceiveMessage", (user, message) =>
+        {
+            var encodedMsg = $"{user}: {message}";
+            messages.Add(encodedMsg);
+            StateHasChanged();
+        });
+
+        hubConnection.On<List<string>>("ReceiveUsers", (users) =>
+        {
+            this.users = users;
+            StateHasChanged();
+        });
+
+        await hubConnection.StartAsync();
+    }
+
+    async Task Send() =>
+        await hubConnection.SendAsync("SendMessage", userInput, messageInput);
+
+    async Task GetUsers() =>
+        await hubConnection.SendAsync("GetAllUsers");
+
+    public bool IsConnected =>
+        hubConnection.State == HubConnectionState.Connected;
+
+    //public async ValueTask DisposeAsync()
+    //{
+    //    await hubConnection.DisposeAsync();
+    //}
+}
